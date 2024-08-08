@@ -1,99 +1,127 @@
-const Book = require('../models/book');
+import Book from '../models/book.js';
 
-exports.createBook = async (req, res) => {
+// Créer un livre
+export const createBook = async (req, res) => {
   try {
+    console.log('Request body:', req.body);
+    console.log('File:', req.file);
+    console.log('User:', req.user);
+
+    if (!req.body.book) {
+      throw new Error('No book data provided');
+    }
+
+    const bookData = JSON.parse(req.body.book);
+
+    if (!bookData.title || !bookData.author || !bookData.year || !bookData.genre) {
+      throw new Error('Missing required book fields');
+    }
+
+    if (!req.file) {
+      throw new Error('No image file provided');
+    }
+
     const book = new Book({
-      ...req.body,
+      ...bookData,
       userId: req.user._id,
-      imageUrl: req.file.path
+      imageUrl: `/uploads/${req.file.filename}` // Stocker le chemin relatif de l'image
     });
+
+    console.log('Book data to save:', book);
+
     await book.save();
     res.status(201).send({ message: 'Book created successfully', book });
   } catch (err) {
-    res.status(400).send(err);
+    console.error('Error:', err.message);
+    res.status(400).send({ error: err.message });
   }
 };
 
-exports.getAllBooks = async (req, res) => {
+
+
+// Obtenir tous les livres
+export const getAllBooks = async (req, res) => {
   try {
     const books = await Book.find();
     res.status(200).send(books);
   } catch (err) {
-    res.status(500).send(err);
+    res.status(500).send({ error: err.message });
   }
 };
 
-exports.getBestRatedBooks = async (req, res) => {
-  try {
-    const books = await Book.find().sort({ averageRating: -1 }).limit(3);
-    res.status(200).send(books);
-  } catch (err) {
-    res.status(500).send(err);
-  }
-};
-
-exports.getBookById = async (req, res) => {
+// Obtenir un livre par ID
+export const getBookById = async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
     if (!book) {
-      return res.status(404).send();
+      return res.status(404).send({ error: 'Book not found' });
     }
     res.status(200).send(book);
   } catch (err) {
-    res.status(500).send(err);
+    res.status(500).send({ error: err.message });
   }
 };
 
-exports.updateBookById = async (req, res) => {
+// Mettre à jour un livre par ID
+export const updateBookById = async (req, res) => {
   try {
-    const updates = req.file
-      ? { ...req.body, imageUrl: req.file.path }
-      : req.body;
-
-    const book = await Book.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
-    if (!book) {
-      return res.status(404).send();
+    const bookData = JSON.parse(req.body.book);
+    if (req.file) {
+      bookData.imageUrl = `/uploads/${req.file.filename}`;
     }
-    res.status(200).send({ message: 'Book updated successfully', book });
+    const book = await Book.findByIdAndUpdate(req.params.id, bookData, { new: true });
+    if (!book) {
+      return res.status(404).send({ error: 'Book not found' });
+    }
+    res.status(200).send(book);
   } catch (err) {
-    res.status(400).send(err);
+    res.status(500).send({ error: err.message });
   }
 };
 
-exports.deleteBookById = async (req, res) => {
+// Supprimer un livre par ID
+export const deleteBookById = async (req, res) => {
   try {
     const book = await Book.findByIdAndDelete(req.params.id);
     if (!book) {
-      return res.status(404).send();
+      return res.status(404).send({ error: 'Book not found' });
     }
     res.status(200).send({ message: 'Book deleted successfully' });
   } catch (err) {
-    res.status(500).send(err);
+    res.status(500).send({ error: err.message });
   }
 };
 
-exports.rateBook = async (req, res) => {
+// Noter un livre
+export const rateBook = async (req, res) => {
   try {
-    const { rating } = req.body;
-    if (rating < 0 || rating > 5) {
-      return res.status(400).send({ message: 'Rating must be between 0 and 5' });
+    const { grade } = req.body;
+    
+    if (!grade) {
+      return res.status(400).send({ error: 'Grade is required' });
     }
 
     const book = await Book.findById(req.params.id);
     if (!book) {
-      return res.status(404).send();
+      return res.status(404).send({ error: 'Book not found' });
     }
 
-    const alreadyRated = book.ratings.find(r => r.userId.equals(req.user._id));
-    if (alreadyRated) {
-      return res.status(400).send({ message: 'You have already rated this book' });
-    }
+    book.ratings.push({ userId: req.user._id, grade });
 
-    book.ratings.push({ userId: req.user._id, grade: rating });
     book.averageRating = book.ratings.reduce((acc, rating) => acc + rating.grade, 0) / book.ratings.length;
 
     await book.save();
     res.status(200).send(book);
+  } catch (err) {
+    res.status(500).send({ error: err.message });
+  }
+};
+
+// Obtenir les livres les mieux notés
+export const getBestRatedBooks = async (req, res) => {
+  try {
+    const books = await Book.find().sort({ averageRating: -1 }).limit(5);
+    res.status(200).send(books);
   } catch (err) {
     res.status(500).send(err);
   }

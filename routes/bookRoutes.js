@@ -1,12 +1,21 @@
-const express = require('express');
+import express from 'express';
+import multer from 'multer';
+import auth from '../middlewares/authMiddleware.js';
+import {
+  createBook,
+  getAllBooks,
+  getBookById,
+  updateBookById,
+  deleteBookById,
+  rateBook,
+  getBestRatedBooks
+} from '../controllers/bookController.js';
+
 const router = express.Router();
-const multer = require('multer');
-const auth = require('../middlewares/authMiddleware');
-const bookController = require('../controllers/bookController');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, 'uploads/'); 
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + '-' + file.originalname);
@@ -15,12 +24,13 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-router.post('/', auth, upload.single('image'), bookController.createBook);
-router.get('/', bookController.getAllBooks);
-router.get('/bestrating', bookController.getBestRatedBooks);
-router.get('/:id', bookController.getBookById);
-router.put('/:id', auth, upload.single('image'), bookController.updateBookById);
-router.delete('/:id', auth, bookController.deleteBookById);
-router.post('/:id/rating', auth, bookController.rateBook);
+router.post('/', auth, upload.single('image'), createBook);
+router.get('/', getAllBooks); 
+router.get('/bestrating', getBestRatedBooks);
+router.get('/:id', getBookById);
+router.put('/:id', auth, upload.single('image'), updateBookById);
+router.delete('/:id', auth, deleteBookById);
+router.post('/:id/rating', auth, rateBook);
 
-module.exports = router;
+export default router;
+

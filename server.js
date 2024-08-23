@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import connectDB from './config/db.js'; 
 import bookRoutes from './routes/bookRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -14,6 +15,13 @@ connectDB();
 
 // Middleware
 app.use(express.json());
+
+//Activation de CORS
+app.use(cors({
+  origin: '*', // Accepter toutes les origines
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Accepter toutes les méthodes HTTP
+}));
+
 app.use('/uploads', express.static('uploads')); // Servir les fichiers statiques du répertoire 'uploads'
 
 // Routes

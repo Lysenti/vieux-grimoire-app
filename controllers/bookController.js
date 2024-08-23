@@ -1,42 +1,49 @@
 import Book from '../models/book.js';
 
-// Créer un livre
-export const createBook = async (req, res) => {
-  try {
-    console.log('Request body:', req.body);
-    console.log('File:', req.file);
-    console.log('User:', req.user);
 
-    if (!req.body.book) {
-      throw new Error('No book data provided');
-    }
 
-    const bookData = JSON.parse(req.body.book);
-
-    if (!bookData.title || !bookData.author || !bookData.year || !bookData.genre) {
-      throw new Error('Missing required book fields');
-    }
-
-    if (!req.file) {
-      throw new Error('No image file provided');
-    }
-
-    const book = new Book({
-      ...bookData,
-      userId: req.user._id,
-      imageUrl: `/uploads/${req.file.filename}` // Stocker le chemin relatif de l'image
-    });
-
-    console.log('Book data to save:', book);
-
-    await book.save();
-    res.status(201).send({ message: 'Book created successfully', book });
-  } catch (err) {
-    console.error('Error:', err.message);
-    res.status(400).send({ error: err.message });
-  }
+// Fonction pour générer l'URL complète de l'image
+const saveImageUrl = (imagePath) => {
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000'; // URL du backend, avec fallback si non défini
+  const imageUrl = `${backendUrl}/${imagePath}`; // Génération de l'URL complète
+  return imageUrl;
 };
 
+
+// Créer un livre avec upload d'image
+export const createBook = async (req, res) => {
+  try {
+    // Si une image est envoyée, on génère l'URL complète de l'image
+    let imageUrl;
+    if (req.file) {
+      imageUrl = saveImageUrl(`uploads/${req.file.filename}`);
+    }
+
+    const reqBook = JSON.parse(req.body.book);
+    const rating = reqBook.ratings ? reqBook.ratings[0] : undefined;
+    if (rating) {
+      rating.userId = req.user.id;
+    }
+
+    // Créer un nouveau livre avec les données envoyées et l'URL de l'image (si présente)
+    const book = new Book({
+      userId: req.user._id,  
+      title: reqBook.title,
+      author: reqBook.author,
+      imageUrl: imageUrl || '',  
+      year: reqBook.year, 
+      genre: reqBook.genre,  
+      ratings: rating ? [rating] : [],  
+      averageRating: rating ? rating.grade : 0 ,  
+     });
+
+    // Sauvegarder le livre dans la base de données
+    await book.save();
+    res.status(201).json(book);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la création du livre.' });
+  }
+};
 
 
 // Obtenir tous les livres

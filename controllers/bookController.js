@@ -4,7 +4,7 @@ import Book from '../models/book.js';
 
 // Fonction pour générer l'URL complète de l'image
 const saveImageUrl = (imagePath) => {
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000'; // URL du backend, avec fallback si non défini
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000'; 
   const imageUrl = `${backendUrl}/${imagePath}`; // Génération de l'URL complète
   return imageUrl;
 };
@@ -22,12 +22,12 @@ export const createBook = async (req, res) => {
     const reqBook = JSON.parse(req.body.book);
     const rating = reqBook.ratings ? reqBook.ratings[0] : undefined;
     if (rating) {
-      rating.userId = req.user.id;
+      rating.userId = req.user._id.toString();  // Convertit en chaîne de caractères
     }
 
     // Créer un nouveau livre avec les données envoyées et l'URL de l'image (si présente)
     const book = new Book({
-      userId: req.user._id,  
+      userId: req.user._id.toString(),  // Convertit en chaîne de caractères
       title: reqBook.title,
       author: reqBook.author,
       imageUrl: imageUrl || '',  
@@ -46,26 +46,46 @@ export const createBook = async (req, res) => {
 };
 
 
+
 // Obtenir tous les livres
 export const getAllBooks = async (req, res) => {
   try {
-    const books = await Book.find();
-    res.status(200).send(books);
+    const books = await Book.find().populate('userId', 'name email');
+
+    // Convertir userId en chaîne de caractères dans chaque livre
+    const booksWithStringUserId = books.map(book => {
+      // Convertit userId en chaîne si c'est un objet
+      if (book.userId && typeof book.userId === 'object') {
+        book.userId = book.userId._id.toString();
+      }
+      return book;
+    });
+
+    res.status(200).send(booksWithStringUserId);
   } catch (err) {
-    res.status(500).send({ error: err.message });
+    console.error('Erreur lors de la récupération des livres:', err.message); 
+    res.status(500).send({ error: 'Erreur serveur lors de la récupération des livres.' });
   }
 };
 
 // Obtenir un livre par ID
 export const getBookById = async (req, res) => {
   try {
-    const book = await Book.findById(req.params.id);
+    const book = await Book.findById(req.params.id).populate('userId', 'name email');
+
     if (!book) {
       return res.status(404).send({ error: 'Book not found' });
     }
+
+    // Convertit userId en chaîne si c'est un objet
+    if (book.userId && typeof book.userId === 'object') {
+      book.userId = book.userId._id.toString();
+    }
+
     res.status(200).send(book);
   } catch (err) {
-    res.status(500).send({ error: err.message });
+    console.error('Erreur lors de la récupération du livre par ID:', err.message); 
+    res.status(500).send({ error: 'Erreur serveur lors de la récupération du livre.' });
   }
 };
 
@@ -101,11 +121,17 @@ export const deleteBookById = async (req, res) => {
 
 // Noter un livre
 export const rateBook = async (req, res) => {
+  console.log('Utilisateur authentifié:', req.user); // Vérifie que l'utilisateur est authentifié
+  console.log('Corps de la requête:', req.body); // Vérifie le corps de la requête
   try {
     const { grade } = req.body;
-    
+
     if (!grade) {
       return res.status(400).send({ error: 'Grade is required' });
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).send({ error: 'User is not authenticated.' });
     }
 
     const book = await Book.findById(req.params.id);
@@ -113,23 +139,42 @@ export const rateBook = async (req, res) => {
       return res.status(404).send({ error: 'Book not found' });
     }
 
-    book.ratings.push({ userId: req.user._id, grade });
+    const existingRating = book.ratings.find(
+      (rating) => rating.userId.toString() === req.user._id.toString()
+    );
 
+    if (existingRating) {
+      return res.status(400).send({ error: 'You have already rated this book.' });
+    }
+
+    book.ratings.push({ userId: req.user._id, grade });
     book.averageRating = book.ratings.reduce((acc, rating) => acc + rating.grade, 0) / book.ratings.length;
 
     await book.save();
     res.status(200).send(book);
   } catch (err) {
-    res.status(500).send({ error: err.message });
+    console.error('Erreur lors de la notation du livre:', err.message); 
+    res.status(500).send({ error: 'Erreur serveur lors de la notation du livre.' });
   }
 };
 
-// Obtenir les livres les mieux notés
+
+
 export const getBestRatedBooks = async (req, res) => {
   try {
-    const books = await Book.find().sort({ averageRating: -1 }).limit(5);
-    res.status(200).send(books);
+    const books = await Book.find().sort({ averageRating: -1 }).limit(5).populate('userId', 'name email');
+
+    // Convertir userId en chaîne de caractères dans chaque livre
+    const booksWithStringUserId = books.map(book => {
+      if (book.userId && typeof book.userId === 'object') {
+        book.userId = book.userId._id.toString();
+      }
+      return book;
+    });
+
+    res.status(200).send(booksWithStringUserId);
   } catch (err) {
-    res.status(500).send(err);
+    console.error('Erreur lors de la récupération des livres les mieux notés:', err.message);
+    res.status(500).send({ error: 'Erreur serveur lors de la récupération des livres les mieux notés.' });
   }
 };

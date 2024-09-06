@@ -25,11 +25,19 @@ export const login = async (req, res) => {
     if (!isMatch) {
       throw new Error('Unable to login');
     }
+
+    // Génère le token JWT
     const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET, {
       expiresIn: '1h'
     });
-    res.send({ user, token });
+
+    // Retourne la réponse au format attendu par le front-end
+    res.send({
+      userId: user._id.toString(), // Met directement userId dans la réponse
+      token
+    });
   } catch (err) {
     res.status(400).send({ error: 'Unable to login' });
   }
 };
+

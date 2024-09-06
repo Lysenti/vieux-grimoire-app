@@ -8,7 +8,7 @@ import userRoutes from './routes/userRoutes.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // Connect to MongoDB
 connectDB();
@@ -20,6 +20,7 @@ app.use(express.json());
 app.use(cors({
   origin: '*', // Accepter toutes les origines
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Accepter toutes les méthodes HTTP
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use('/uploads', express.static('uploads')); // Servir les fichiers statiques du répertoire 'uploads'

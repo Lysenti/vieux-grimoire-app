@@ -121,24 +121,28 @@ export const deleteBookById = async (req, res) => {
 
 // Noter un livre
 export const rateBook = async (req, res) => {
-  console.log('Utilisateur authentifié:', req.user); // Vérifie que l'utilisateur est authentifié
-  console.log('Corps de la requête:', req.body); // Vérifie le corps de la requête
+
+  const { rating } = req.body;
+
   try {
     const { grade } = req.body;
 
-    if (!grade) {
-      return res.status(400).send({ error: 'Grade is required' });
+    if (!rating) {
+      return res.status(400).send({ error: 'Rating is required' });
     }
 
+    // Vérifie que l'utilisateur est authentifié
     if (!req.user || !req.user._id) {
       return res.status(401).send({ error: 'User is not authenticated.' });
     }
 
+    // Récupère le livre par ID
     const book = await Book.findById(req.params.id);
     if (!book) {
       return res.status(404).send({ error: 'Book not found' });
     }
 
+    // Vérifie si l'utilisateur a déjà noté ce livre
     const existingRating = book.ratings.find(
       (rating) => rating.userId.toString() === req.user._id.toString()
     );
@@ -147,10 +151,15 @@ export const rateBook = async (req, res) => {
       return res.status(400).send({ error: 'You have already rated this book.' });
     }
 
-    book.ratings.push({ userId: req.user._id, grade });
+    // Ajoute la nouvelle notation
+    book.ratings.push({ userId: req.user._id, grade: rating }); // Utilise `rating` pour définir `grade`
+
+    // Recalcule la moyenne des notations
     book.averageRating = book.ratings.reduce((acc, rating) => acc + rating.grade, 0) / book.ratings.length;
 
+    // Sauvegarde le livre avec la nouvelle notation
     await book.save();
+
     res.status(200).send(book);
   } catch (err) {
     console.error('Erreur lors de la notation du livre:', err.message); 

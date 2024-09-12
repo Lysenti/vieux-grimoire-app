@@ -93,6 +93,9 @@ export const updateBookById = async (req, res) => {
 
     const parsedBook = JSON.parse(book);
 
+    console.log('Contenu de book:', book);
+    console.log('Données analysées de book:', parsedBook);
+
 
     // Recherche du livre par ID pour mettre à jour ses propriétés
     const bookToUpdate = await Book.findById(req.params.id);
@@ -101,21 +104,31 @@ export const updateBookById = async (req, res) => {
       return res.status(404).json({ message: 'Livre non trouvé' });
     }
 
-     // Vérifier que l'utilisateur est authentifié
+     // Vérifie que l'utilisateur est authentifié
      if (!req.user || !req.user._id) {
       return res.status(401).send({ error: 'User is not authenticated.' });
     }
 
-    // Vérifiez si l'utilisateur est le créateur du livre
+    // Vérifie si l'utilisateur est le créateur du livre
     const isCreator = bookToUpdate.userId.toString() === req.user._id.toString();
 
     // Si l'utilisateur est le créateur, permettre la mise à jour complète
     if (isCreator) {
-      // Vérifiez s'il y a un fichier image et générez une nouvelle URL d'image si nécessaire
-      let imageUrl = parsedBook.imageUrl;
+
+      let imageUrl = bookToUpdate.imageUrl;
       if (req.file) {
         imageUrl = saveImageUrl(`uploads/${req.file.filename}`);
+        console.log('Nouvelle image URL:', imageUrl);
       }
+
+
+      console.log('Données avant mise à jour du livre :', {
+        title: bookToUpdate.title,
+        author: bookToUpdate.author,
+        year: bookToUpdate.year,
+        genre: bookToUpdate.genre,
+        imageUrl: bookToUpdate.imageUrl
+      });
 
       // Mettre à jour les propriétés du livre
       bookToUpdate.title = parsedBook.title || bookToUpdate.title;
@@ -123,6 +136,22 @@ export const updateBookById = async (req, res) => {
       bookToUpdate.year = parsedBook.year || bookToUpdate.year;
       bookToUpdate.genre = parsedBook.genre || bookToUpdate.genre;
       bookToUpdate.imageUrl = imageUrl;
+
+      console.log('Données après mise à jour du livre :', {
+        title: bookToUpdate.title,
+        author: bookToUpdate.author,
+        year: bookToUpdate.year,
+        genre: bookToUpdate.genre,
+        imageUrl: bookToUpdate.imageUrl
+      });
+
+      
+
+      console.log('Livre à mettre à jour après modification:', bookToUpdate);
+
+    } else {
+      return res.status(403).json({ message: 'Accès refusé : vous ne pouvez pas modifier ce livre.' });
+
     }
 
     // Mise à jour du rating (note) pour tous les utilisateurs

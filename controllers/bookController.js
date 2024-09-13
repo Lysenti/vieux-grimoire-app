@@ -1,5 +1,8 @@
 import Book from '../models/book.js';
 import multer from 'multer';
+import sharp from 'sharp';
+
+
 
 
 // Configure multer pour l'upload en mémoire
@@ -26,29 +29,34 @@ export const uploadImage = upload.single('image');
 // Créer un nouveau livre
 export const createBook = async (req, res) => {
   try {
-    // Extraire le champ 'book' du corps de la requête et le parser
     const { book } = req.body;
     const parsedBook = JSON.parse(book);
 
-    // Vérifier que le fichier a été reçu et qu'il est valide
     if (!req.file || !req.file.path) {
       return res.status(400).json({ message: 'Image non reçue ou invalide.' });
     }
 
-     // Générer l'URL complète de l'image
-     const imageUrl = saveImageUrl(`uploads/${req.file.filename}`);
+    const optimizedImagePath = `uploads/optimized-${Date.now()}-${req.file.originalname}`;
 
 
-    // Créer un nouvel objet livre avec les données reçues
+    // Utiliser sharp pour redimensionner et optimiser l'image
+    await sharp(req.file.path)
+      .resize({ width: 800 }) 
+      .toFormat('jpeg') 
+      .jpeg({ quality: 80 }) 
+      .toFile(optimizedImagePath); 
+
+    // Générer l'URL complète de l'image optimisée
+    const imageUrl = saveImageUrl(optimizedImagePath);
+
+
     const newBook = new Book({
       ...parsedBook,
       imageUrl,
     });
 
-    // Enregistrer le nouveau livre dans la base de données
     await newBook.save();
 
-    // Retourner le livre créé avec succès
     res.status(201).json(newBook);
   } catch (error) {
     console.error('Erreur lors de la création du livre:', error);
@@ -82,45 +90,41 @@ export const getBookById = async (req, res) => {
   }
 };
 
+// Mettre à jour un livre par ID
 export const updateBookById = async (req, res) => {
   try {
     const { book } = req.body;
 
+    console.log('Requête reçue par le serveur:', req.body);
+    console.log('Fichier reçu:', req.file);
 
     if (!book) {
       return res.status(400).json({ message: 'Les données du livre sont manquantes ou invalides.' });
     }
 
     const parsedBook = JSON.parse(book);
-
+    
     console.log('Contenu de book:', book);
     console.log('Données analysées de book:', parsedBook);
 
-
-    // Recherche du livre par ID pour mettre à jour ses propriétés
     const bookToUpdate = await Book.findById(req.params.id);
 
     if (!bookToUpdate) {
       return res.status(404).json({ message: 'Livre non trouvé' });
     }
 
-     // Vérifie que l'utilisateur est authentifié
-     if (!req.user || !req.user._id) {
+    if (!req.user || !req.user._id) {
       return res.status(401).send({ error: 'User is not authenticated.' });
     }
 
-    // Vérifie si l'utilisateur est le créateur du livre
     const isCreator = bookToUpdate.userId.toString() === req.user._id.toString();
 
-    // Si l'utilisateur est le créateur, permettre la mise à jour complète
     if (isCreator) {
-
       let imageUrl = bookToUpdate.imageUrl;
-      if (req.file) {
+      if (req.file && req.file.path) {
         imageUrl = saveImageUrl(`uploads/${req.file.filename}`);
         console.log('Nouvelle image URL:', imageUrl);
       }
-
 
       console.log('Données avant mise à jour du livre :', {
         title: bookToUpdate.title,
@@ -130,7 +134,6 @@ export const updateBookById = async (req, res) => {
         imageUrl: bookToUpdate.imageUrl
       });
 
-      // Mettre à jour les propriétés du livre
       bookToUpdate.title = parsedBook.title || bookToUpdate.title;
       bookToUpdate.author = parsedBook.author || bookToUpdate.author;
       bookToUpdate.year = parsedBook.year || bookToUpdate.year;
@@ -145,16 +148,10 @@ export const updateBookById = async (req, res) => {
         imageUrl: bookToUpdate.imageUrl
       });
 
-      
-
-      console.log('Livre à mettre à jour après modification:', bookToUpdate);
-
     } else {
       return res.status(403).json({ message: 'Accès refusé : vous ne pouvez pas modifier ce livre.' });
-
     }
 
-    // Mise à jour du rating (note) pour tous les utilisateurs
     if (parsedBook.rating) {
       const existingRating = bookToUpdate.ratings.find(
         (rating) => rating.userId.toString() === req.auth.userId.toString()
@@ -166,13 +163,10 @@ export const updateBookById = async (req, res) => {
         bookToUpdate.ratings.push({ userId: req.auth.userId, grade: parsedBook.rating });
       }
 
-      // Recalculer la note moyenne
       bookToUpdate.averageRating = bookToUpdate.ratings.reduce((acc, curr) => acc + curr.grade, 0) / bookToUpdate.ratings.length;
     }
 
-    // Sauvegarder le livre mis à jour
     const updatedBook = await bookToUpdate.save();
-
     res.status(200).json(updatedBook);
   } catch (error) {
     console.error('Erreur lors de la mise à jour du livre:', error);
@@ -204,18 +198,15 @@ export const rateBook = async (req, res) => {
       return res.status(400).send({ error: 'Rating is required' });
     }
 
-    // Vérifie que l'utilisateur est authentifié
     if (!req.user || !req.user._id) {
       return res.status(401).send({ error: 'User is not authenticated.' });
     }
 
-    // Récupère le livre par ID
     const book = await Book.findById(req.params.id);
     if (!book) {
       return res.status(404).send({ error: 'Book not found' });
     }
 
-    // Vérifie si l'utilisateur a déjà noté ce livre
     const existingRating = book.ratings.find(
       (rating) => rating.userId.toString() === req.user._id.toString()
     );
@@ -224,22 +215,17 @@ export const rateBook = async (req, res) => {
       return res.status(400).send({ error: 'You have already rated this book.' });
     }
 
-    // Ajoute la nouvelle notation
     book.ratings.push({ userId: req.user._id, grade: rating });
 
-    // Recalcule la moyenne des notations
     book.averageRating = book.ratings.reduce((acc, rating) => acc + rating.grade, 0) / book.ratings.length;
 
-    // Sauvegarde le livre avec la nouvelle notation
     await book.save();
-
     res.status(200).send(book);
   } catch (err) {
     console.error('Erreur lors de la notation du livre:', err.message); 
     res.status(500).send({ error: 'Erreur serveur lors de la notation du livre.' });
   }
 };
-
 
 // Obtenir les livres les mieux notés
 export const getBestRatedBooks = async (req, res) => {

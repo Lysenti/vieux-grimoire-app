@@ -53,7 +53,7 @@ const upload = multer({
 app.use('/uploads', express.static('uploads'));
 
 // Passer le middleware upload à bookRoutes via les options de route
-app.use('/api/books', bookRoutes(upload)); 
+app.use('/api/books', bookRoutes); 
 app.use('/api/auth', userRoutes);
 
 // Route pour l'upload de fichiers

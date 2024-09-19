@@ -1,20 +1,6 @@
 import Book from '../models/book.js';
-import multer from 'multer';
-import sharp from 'sharp';
 
 
-
-
-// Configure multer pour l'upload en mémoire
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
 
 // Fonction pour générer l'URL complète de l'image
 const saveImageUrl = (imagePath) => {
@@ -24,7 +10,7 @@ const saveImageUrl = (imagePath) => {
 };
 
 // Middleware pour l'upload d'image
-export const uploadImage = upload.single('image');
+//export const uploadImage = upload.single('image');
 
 // Créer un nouveau livre
 export const createBook = async (req, res) => {
@@ -36,23 +22,13 @@ export const createBook = async (req, res) => {
       return res.status(400).json({ message: 'Image non reçue ou invalide.' });
     }
 
-    const optimizedImagePath = `uploads/optimized-${Date.now()}-${req.file.originalname}`;
+    //const optimizedImagePath = `uploads/optimized-${Date.now()}-${req.file.originalname}`;
 
 
-    // Utiliser sharp pour redimensionner et optimiser l'image
-    await sharp(req.file.path)
-      .resize({ width: 800 }) 
-      .toFormat('jpeg') 
-      .jpeg({ quality: 80 }) 
-      .toFile(optimizedImagePath); 
-
-    // Générer l'URL complète de l'image optimisée
-    const imageUrl = saveImageUrl(optimizedImagePath);
-
-
+   
     const newBook = new Book({
       ...parsedBook,
-      imageUrl,
+      imageUrl: req.file.path,
     });
 
     await newBook.save();
@@ -93,24 +69,22 @@ export const getBookById = async (req, res) => {
 // Mettre à jour un livre par ID
 export const updateBookById = async (req, res) => {
   try {
-    const { book } = req.body;
-
-    console.log('Requête reçue par le serveur:', req.body);
-    console.log('Fichier reçu:', req.file);
-
-    if (!book) {
-      return res.status(400).json({ message: 'Les données du livre sont manquantes ou invalides.' });
+    let book;
+    if ("book" in req.body) {
+      book = JSON.parse(req.body.book);
+    } else{
+      book = req.body;
     }
 
-    const parsedBook = JSON.parse(book);
-    
-    console.log('Contenu de book:', book);
-    console.log('Données analysées de book:', parsedBook);
+
+    if (!book) {
+      return res.status(404).json({ message: 'Book data is missing or invalid' });
+    }
 
     const bookToUpdate = await Book.findById(req.params.id);
 
-    if (!bookToUpdate) {
-      return res.status(404).json({ message: 'Livre non trouvé' });
+    if(!bookToUpdate) {
+      return res.status(404).json({ message: 'Book not found'});
     }
 
     if (!req.user || !req.user._id) {
@@ -120,10 +94,9 @@ export const updateBookById = async (req, res) => {
     const isCreator = bookToUpdate.userId.toString() === req.user._id.toString();
 
     if (isCreator) {
-      let imageUrl = bookToUpdate.imageUrl;
+    
       if (req.file && req.file.path) {
-        imageUrl = saveImageUrl(`uploads/${req.file.filename}`);
-        console.log('Nouvelle image URL:', imageUrl);
+        bookToUpdate.imageUrl = req.file.path;
       }
 
       console.log('Données avant mise à jour du livre :', {
@@ -134,11 +107,11 @@ export const updateBookById = async (req, res) => {
         imageUrl: bookToUpdate.imageUrl
       });
 
-      bookToUpdate.title = parsedBook.title || bookToUpdate.title;
-      bookToUpdate.author = parsedBook.author || bookToUpdate.author;
-      bookToUpdate.year = parsedBook.year || bookToUpdate.year;
-      bookToUpdate.genre = parsedBook.genre || bookToUpdate.genre;
-      bookToUpdate.imageUrl = imageUrl;
+      bookToUpdate.title = book.title || bookToUpdate.title;
+      bookToUpdate.author = book.author || bookToUpdate.author;
+      bookToUpdate.year = book.year || bookToUpdate.year;
+      bookToUpdate.genre = book.genre || bookToUpdate.genre;
+
 
       console.log('Données après mise à jour du livre :', {
         title: bookToUpdate.title,
@@ -152,17 +125,21 @@ export const updateBookById = async (req, res) => {
       return res.status(403).json({ message: 'Accès refusé : vous ne pouvez pas modifier ce livre.' });
     }
 
-    if (parsedBook.rating) {
+    // Mise à jour des notes (ratings) si elles sont fournies
+    if (book.rating) {
       const existingRating = bookToUpdate.ratings.find(
-        (rating) => rating.userId.toString() === req.auth.userId.toString()
+        (rating) => rating.userId.toString() === req.user._id.toString()
       );
 
       if (existingRating) {
-        existingRating.grade = parsedBook.rating;
+        // Mise à jour de la note si l'utilisateur a déjà noté le livre
+        existingRating.grade = book.rating;
       } else {
-        bookToUpdate.ratings.push({ userId: req.auth.userId, grade: parsedBook.rating });
+        // Ajout d'une nouvelle note si l'utilisateur n'a pas encore noté le livre
+        bookToUpdate.ratings.push({ userId: req.user._id, grade: book.rating });
       }
 
+      // Calcul de la moyenne des notes
       bookToUpdate.averageRating = bookToUpdate.ratings.reduce((acc, curr) => acc + curr.grade, 0) / bookToUpdate.ratings.length;
     }
 
@@ -230,7 +207,7 @@ export const rateBook = async (req, res) => {
 // Obtenir les livres les mieux notés
 export const getBestRatedBooks = async (req, res) => {
   try {
-    const books = await Book.find({}).sort({ averageRating: -1 }).limit(5);
+    const books = await Book.find({}).sort({ averageRating: -1 }).limit(3);
     res.status(200).json(books);
   } catch (error) {
     console.error('Erreur lors de la récupération des livres les mieux notés:', error);
